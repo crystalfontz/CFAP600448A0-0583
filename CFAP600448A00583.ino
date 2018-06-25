@@ -385,10 +385,10 @@ void send_pixels_BW(uint16_t byteCount, uint8_t *dataPtr)
 
 //=============================================================================
 #define SHUTDOWN_BETWEEN_UPDATES (0)
-#define white 0
-#define zebra 0
-#define black 0
-#define showBMPs 1
+#define white 1
+#define zebra 1
+#define black 1
+#define showBMPs 0
 void loop()
 {
   Serial.println("top of loop");
@@ -409,22 +409,25 @@ void loop()
 #endif
 
 
+
+
+
 #if zebra
   //Display the splash screen
   writeCMD(0x10);
-  for (long i = 0; i < 8400 * 4; i++)
+  for (long i = 0; i < 33600; i++)
   {
     writeData(0x33);
   }
-  for (long i = 0; i < 8400 * 4; i++)
+  for (long i = 0; i < 33600; i++)
   {
     writeData(0x00);
   }
-  for (long i = 0; i < 8400 * 4; i++)
+  for (long i = 0; i < 33600; i++)
   {
     writeData(0x33);
   }
-  for (long i = 0; i < 8400 * 4; i++)
+  for (long i = 0; i < 33600; i++)
   {
     writeData(0x00);
   }
@@ -442,19 +445,19 @@ void loop()
 
   //Display the splash screen
   writeCMD(0x10);
-  for (long i = 0; i < 8400 * 4; i++)
+  for (long i = 0; i < 33600; i++)
   {
     writeData(0x00);
   }
-  for (long i = 0; i < 8400 * 4; i++)
+  for (long i = 0; i < 33600; i++)
   {
     writeData(0x33);
   }
-  for (long i = 0; i < 8400 * 4; i++)
+  for (long i = 0; i < 33600; i++)
   {
     writeData(0x00);
   }
-  for (long i = 0; i < 8400 * 4; i++)
+  for (long i = 0; i < 33600; i++)
   {
     writeData(0x33);
   }
