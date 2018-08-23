@@ -75,6 +75,8 @@
 
 // Include LUTs
 #include "LUTs_for_CFAP600448A00583.h"
+// Include Images
+#include "Images_for_CFAP600448A00583.h"
 
 #define ePaper_RST_0  (digitalWrite(EPD_RESET, LOW))
 #define ePaper_RST_1  (digitalWrite(EPD_RESET, HIGH))
@@ -88,6 +90,9 @@
 #define EPD_DC      5
 #define EPD_CS      10
 #define SD_CS       8
+
+#define HRES  600
+#define VRES  448
 
 //=============================================================================
 //this function will take in a byte and send it to the display with the 
@@ -172,12 +177,12 @@ void initEPD()
 
   //Panel Setting 
   writeCMD(0x00);
-  writeData(0xcb);
-  writeData(0x08);
+  writeData(0xc3);
+  //writeData(0x08);
 
   //PLL Control
   writeCMD(0x30);
-  writeData(0x3a);
+  writeData(0x3b);
 
   //Temperature setting
   writeCMD(0x41);
@@ -197,7 +202,7 @@ void initEPD()
 
   //Vcom and data interval setting
   writeCMD(0x50);
-  writeData(0x77);
+  writeData(0x67);
 
   writeCMD(0x60);
   writeData(0x22);
@@ -342,6 +347,80 @@ void show_BMPs_in_root(void)
 }
 
 //================================================================================
+void Load_Flash_Image_To_Display_RAM_RLE(uint16_t width_pixels,
+  uint16_t height_pixels,
+  const uint8_t *BW_image)
+{
+  //Index into *image, that works with pgm_read_byte()
+
+  //Get width_bytes from width_pixel, rounding up
+  uint8_t
+    width_bytes;
+  width_bytes = (width_pixels + 7) >> 3;
+
+  //Make sure the display is not busy before starting a new command.
+  while (0 == digitalRead(EPD_READY));
+  //Select the controller   
+  ePaper_CS_0;
+
+  //Aim at the command register
+  ePaper_DC_0;
+  //Write the command: DATA START TRANSMISSION 2 (DTM2) (R13H)
+  //  Display Start transmission 2
+  //  (DTM2, Red Data)
+  //
+  // This command starts transmitting data and write them into SRAM. To complete
+  // data transmission, command DSP (Data transmission Stop) must be issued. Then
+  // the chip will start to send data/VCOM for panel.
+  //  * In B/W mode, this command writes “NEW” data to SRAM.
+  //  * In B/W/Red mode, this command writes “Red” data to SRAM.
+  SPI.transfer(0x10);
+  //Pump out the Red data.
+  ePaper_DC_1;
+  uint8_t count = 0;
+  uint8_t byteRead = 0;
+  uint8_t byteSent[4];
+  for (int i = 0; i < MONO_ARRAY_SIZE; i = i + 2)
+  {
+    count = pgm_read_byte(&BW_image[i]);
+    byteRead = pgm_read_byte(&BW_image[i + 1]);
+
+    uint8_t x = 0;
+    for (int j = 7; j > 0; j = j - 2)
+    {
+      byteSent[x] = 0x00;
+      if (((byteRead >> j) & 0x01 ) == 1)
+      {
+        byteSent[x] = 0x30;
+      }
+      if (((byteRead >> (j-1)) & 0x01) == 1)
+      {
+        byteSent[x] |= 0x03;
+      }
+      x++;
+    }
+    
+    for (uint8_t j = 0; j < count; j++)
+    {
+      for (uint8_t k = 0; k < 4; k++)
+      {
+      SPI.transfer(byteSent[k]);
+      }
+    }
+  }
+
+  //Aim back at the command register
+  ePaper_DC_0;
+  //Write the command: DATA STOP (DSP) (R11H)
+  SPI.transfer(0x11);
+  //Write the command: Display Refresh (DRF)   
+  SPI.transfer(0x12);
+  //Deslect the controller   
+  ePaper_CS_1;
+}
+
+
+//================================================================================
 void send_pixels_BW(uint16_t byteCount, uint8_t *dataPtr)
 {
   uint8_t data;
@@ -382,18 +461,33 @@ void send_pixels_BW(uint16_t byteCount, uint8_t *dataPtr)
   }
 }
 
+void powerON()
+{
+  writeCMD(0x04);
+}
+
+void powerOff()
+{
+  writeCMD(0x02);
+  writeCMD(0x03);
+  writeData(0x00);
+}
 
 //=============================================================================
-#define SHUTDOWN_BETWEEN_UPDATES (0)
-#define white 1
-#define zebra 1
-#define black 1
-#define showBMPs 0
+#define waittime          1000
+#define white             0
+#define black             0
+#define zebra             0
+#define splashscreenRLE   1
+#define showBMPs          0
+#define readTXT           0
 void loop()
 {
   Serial.println("top of loop");
+  
 
 #if white
+  powerON();
 	writeCMD(0x10);
 	for (long i = 0; i < 134400; i++)
 	{
@@ -405,74 +499,12 @@ void loop()
 	writeCMD(0x12);
 	while (0 == digitalRead(EPD_READY));
   Serial.println("after refresh wait");
-	delay(2000);
+  powerOff();
+	delay(waittime);
 #endif
-
-
-
-
-
-#if zebra
-  //Display the splash screen
-  writeCMD(0x10);
-  for (long i = 0; i < 33600; i++)
-  {
-    writeData(0x33);
-  }
-  for (long i = 0; i < 33600; i++)
-  {
-    writeData(0x00);
-  }
-  for (long i = 0; i < 33600; i++)
-  {
-    writeData(0x33);
-  }
-  for (long i = 0; i < 33600; i++)
-  {
-    writeData(0x00);
-  }
-
-  Serial.println("before refresh wait");
-  //refresh the display
-  writeCMD(0x11);
-  writeCMD(0x12);
-  while (0 == digitalRead(EPD_READY));
-  Serial.println("after refresh wait");
-  delay(2000);
-
-
-
-
-  //Display the splash screen
-  writeCMD(0x10);
-  for (long i = 0; i < 33600; i++)
-  {
-    writeData(0x00);
-  }
-  for (long i = 0; i < 33600; i++)
-  {
-    writeData(0x33);
-  }
-  for (long i = 0; i < 33600; i++)
-  {
-    writeData(0x00);
-  }
-  for (long i = 0; i < 33600; i++)
-  {
-    writeData(0x33);
-  }
-
-  Serial.println("before refresh wait");
-  //refresh the display
-  writeCMD(0x11);
-  writeCMD(0x12);
-  while (0 == digitalRead(EPD_READY));
-  Serial.println("after refresh wait");
-  delay(2000);
-#endif
-
 
 #if black
+  powerON();
   //Display the splash screen
   writeCMD(0x10);
   for (long i = 0; i < 134400; i++)
@@ -492,13 +524,98 @@ void loop()
   writeCMD(0x12);
   while (0 == digitalRead(EPD_READY));
   Serial.println("after refresh wait");
+  powerOff();
+  delay(waittime);
+#endif
+
+#if zebra
+  powerON();
+  //Display the splash screen
+  writeCMD(0x10);
+  for (long i = 0; i < 33600; i++)
+  {
+    writeData(0x33);
+  }
+  for (long i = 0; i < 33600; i++)
+  {
+    writeData(0x00);
+  }
+  for (long i = 0; i < 33600; i++)
+  {
+    writeData(0x33);
+  }
+  for (long i = 0; i < 33600; i++)
+  {
+    writeData(0x00);
+  }
+
+  Serial.println("before refresh wait");
+  //refresh the display
+  writeCMD(0x11);
+  writeCMD(0x12);
+  while (0 == digitalRead(EPD_READY));
+  Serial.println("after refresh wait");
   delay(2000);
+
+
+
+
+  //Display the splash screen
+  writeCMD(0x10);
+  for (long i = 0; i < 33600; i++)
+  {
+    writeData(0x00);
+  }
+  for (long i = 0; i < 33600; i++)
+  {
+    writeData(0x33);
+  }
+  for (long i = 0; i < 33600; i++)
+  {
+    writeData(0x00);
+  }
+  for (long i = 0; i < 33600; i++)
+  {
+    writeData(0x33);
+  }
+
+  Serial.println("before refresh wait");
+  //refresh the display
+  writeCMD(0x11);
+  writeCMD(0x12);
+  while (0 == digitalRead(EPD_READY));
+  Serial.println("after refresh wait");
+  powerOff();
+  delay(waittime);
+#endif
+
+#if splashscreenRLE
+  //on the Seeeduino, there is not enough flash memory to store this data 
+  //but if another uP with more flash is used, this function can be utilized
+  //power on the display
+  powerON();
+  //load an image to the display
+  Load_Flash_Image_To_Display_RAM_RLE(HRES, VRES, Mono_1BPP);
+
+
+  Serial.print("refreshing . . . ");
+  while (0 == digitalRead(EPD_READY));
+  Serial.println("refresh complete");
+  //for maximum power conservation, power off the EPD
+  powerOff();
+  delay(waittime);
 #endif
 
 #if showBMPs
+  powerON();
+  // since bmps are stored bottom to top, flip the display
+  writeCMD(0x00);
+  writeData(0xcb);
   show_BMPs_in_root();
-  while (1);
+  writeCMD(0x00);
+  writeData(0xc3);
+  powerOff();
+  delay(waittime);
 #endif
-
 }
 //=============================================================================
